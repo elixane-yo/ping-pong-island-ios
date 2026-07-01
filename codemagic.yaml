@@ -1,0 +1,87 @@
+workflows:
+  ios-build:
+    name: iOS Build (без App Store)
+    max_build_duration: 60
+    environment:
+      ios_signing:
+        distribution_type: development  # или adhoc
+        bundle_identifier: com.yourcompany.bouncegame
+      vars:
+        BUNDLE_ID: "com.yourcompany.bouncegame"
+        XCODE_WORKSPACE: "BounceGame.xcworkspace"  # если используете workspace
+        XCODE_SCHEME: "BounceGame"                 # имя вашего проекта
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Установка зависимостей
+        script: |
+          echo "📦 Установка зависимостей..."
+          # Если используете CocoaPods
+          # pod install
+          
+          # Если используете Swift Package Manager
+          # swift package resolve
+      
+      - name: Сборка приложения (Debug)
+        script: |
+          echo "🔨 Сборка приложения в режиме Debug..."
+          xcodebuild \
+            -scheme "$XCODE_SCHEME" \
+            -workspace "$XCODE_WORKSPACE" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath ./build \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            PROVISIONING_PROFILE_SPECIFIER="" \
+            clean build
+        ignore_failure: false
+      
+      - name: Создание .app бандла
+        script: |
+          echo "📁 Создание .app бандла..."
+          mkdir -p ./build/ios
+          cp -r ./build/Build/Products/Debug-iphoneos/*.app ./build/ios/
+          
+      - name: Упаковка в .ipa (опционально)
+        script: |
+          echo "📦 Упаковка в .ipa файл..."
+          mkdir -p ./build/ipa
+          /usr/bin/xcrun -sdk iphoneos PackageApplication \
+            -v ./build/ios/*.app \
+            -o ./build/ipa/BounceGame.ipa
+        ignore_failure: true  # если не получается запаковать, не останавливаем сборку
+      
+      - name: Создание архива для ручной установки
+        script: |
+          echo "📦 Создание архива для ручной установки..."
+          cd ./build/ios
+          zip -r BounceGame.app.zip *.app
+          cd ../..
+
+    artifacts:
+      - ./build/ios/*.app
+      - ./build/ios/*.app.zip
+      - ./build/ipa/*.ipa
+      - ./build/Build/Products/Debug-iphoneos/*.app
+      - ./build/Build/Products/Debug-iphoneos/*.dSYM
+
+    publishing:
+      # Убираем публикацию в App Store
+      email:
+        recipients:
+          - your_email@example.com  # сюда придет уведомление о сборке
+        notify:
+          success: true
+          failure: true
+      
+      # Отключаем публикацию в TestFlight и App Store
+      # app_store_connect:  # ЗАКОММЕНТИРОВАНО - не публикуем в App Store
+      #   auth: integration
+      
+      slack:
+        channel: '#builds'
+        notify_on_build_start: true
+        notify_on_build_success: true
+        notify_on_build_failure: true
